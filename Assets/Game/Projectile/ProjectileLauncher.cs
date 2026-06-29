@@ -16,6 +16,9 @@ namespace ArtilleryFrontier.Projectile
         [SerializeField] private Transform muzzle;
         [SerializeField] private GameObject projectilePrefab;
 
+        [Header("Damage")]
+        [SerializeField] private float damage = 50f;
+
         [Header("Cooldown")]
         [SerializeField] private float fireCooldown = 0.6f;
 
@@ -84,9 +87,10 @@ namespace ArtilleryFrontier.Projectile
 
             rb.linearVelocity = spawnPoint.forward * speed;
 
-            // 確保砲彈有 VFX 組件
-            if (!proj.TryGetComponent<ProjectileVFX>(out _))
-                proj.AddComponent<ProjectileVFX>();
+            // 確保砲彈有 VFX 組件，並傳入傷害值
+            if (!proj.TryGetComponent<ProjectileVFX>(out var vfx))
+                vfx = proj.AddComponent<ProjectileVFX>();
+            vfx.Damage = damage;
 
             Destroy(proj, 12f);
 

@@ -52,11 +52,14 @@ namespace ArtilleryFrontier.Core
             foreach (var av in Object.FindObjectsByType<AngleVisualizer>(FindObjectsSortMode.None))
                 Object.DestroyImmediate(av.gameObject.GetComponent<AngleVisualizer>());
 
-            // 6. Screen Space HUD（核心視覺回饋）
+            // 6. 目標區域（礦脈 + 城堡）
+            TargetZoneBuilder.Build();
+
+            // 7. Screen Space HUD（核心視覺回饋）
             if (Object.FindAnyObjectByType<ArtilleryHUD>() == null)
                 new GameObject("ArtilleryHUD").AddComponent<ArtilleryHUD>();
 
-            // 7. 加入 UI 發射按鈕（Android 用）
+            // 8. 加入 UI 發射按鈕（Android 用）
             BuildFireUI();
 
             Debug.Log("[VerticalSliceSetup] 完成。按 Play 即可體驗 Vertical Slice。");

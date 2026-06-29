@@ -7,6 +7,8 @@ namespace ArtilleryFrontier.Projectile
     [RequireComponent(typeof(Rigidbody))]
     public class ProjectileVFX : MonoBehaviour
     {
+        public float Damage { get; set; } = 50f;
+
         private void Start()
         {
             // 砲彈本體用亮橘色，確保在 URP 下可見（Default 材質在 URP 是粉紅）
@@ -20,6 +22,9 @@ namespace ArtilleryFrontier.Projectile
 
         private void OnCollisionEnter(Collision col)
         {
+            // 傳遞傷害給可破壞目標
+            col.collider.GetComponentInParent<DestructibleTarget>()?.Impact(Damage);
+
             ImpactEffect.Spawn(col.contacts[0].point, col.contacts[0].normal);
 
             var cam = Camera.main;

@@ -1,3 +1,5 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
@@ -7,7 +9,18 @@ namespace ArtilleryFrontier.UI
 {
     public class ArtilleryHUD : MonoBehaviour
     {
+        public static ArtilleryHUD Instance { get; private set; }
+
         private ArtilleryController _ctrl;
+
+        // 資源顯示
+        private Text _stoneText;
+        private Text _ironText;
+        private Text _sulfurText;
+
+        // 區域清除提示
+        private GameObject _clearedPanel;
+        private Text       _clearedText;
 
         // Bearing strip（頂部）
         private RectTransform _bearingMarker;
@@ -24,6 +37,8 @@ namespace ArtilleryFrontier.UI
         private Text _pitchReadout;
 
         private const float MaxPitch = 80f;
+
+        private void Awake() => Instance = this;
 
         private void Start()
         {
@@ -96,6 +111,8 @@ namespace ArtilleryFrontier.UI
             var elevBG    = BuildElevationGauge(root.transform, font);
             BuildReadout(root.transform, font);
             BuildCrosshair(root.transform);
+            BuildInventoryPanel(root.transform, font);
+            BuildAreaClearedOverlay(root.transform, font);
 
             // ── 觸控互動層（透明 Image 覆蓋在刻度條上） ─────────────
             AddGaugeInteract(bearingBG, isHorizontal: true);
@@ -335,6 +352,84 @@ namespace ArtilleryFrontier.UI
             Font f = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             if (f == null) f = Resources.GetBuiltinResource<Font>("Arial.ttf");
             return f;
+        }
+
+        // ── 資源欄（右下）────────────────────────────────────────────
+        private void BuildInventoryPanel(Transform canvas, Font font)
+        {
+            var bg = MakePanel("InventoryPanel", canvas,
+                new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f),
+                new Vector2(-44f, 210f), new Vector2(180f, 100f),
+                new Color(0f, 0f, 0f, 0.60f));
+
+            // 標題
+            var title = MakeText("InvTitle", bg.transform, "RESOURCES", 13, font,
+                new Color(1f, 0.88f, 0.3f, 1f), bold: true);
+            var tr = title.GetComponent<RectTransform>();
+            tr.anchorMin = new Vector2(0f, 1f); tr.anchorMax = new Vector2(1f, 1f);
+            tr.pivot = new Vector2(0.5f, 1f); tr.sizeDelta = new Vector2(0f, 22f);
+            tr.anchoredPosition = new Vector2(0f, 0f);
+
+            _stoneText  = MakeResLine("StoneRow",  bg.transform, font, "STONE   0",
+                new Color(0.65f, 0.65f, 0.70f), 0.66f);
+            _ironText   = MakeResLine("IronRow",   bg.transform, font, "IRON    0",
+                new Color(0.70f, 0.38f, 0.18f), 0.33f);
+            _sulfurText = MakeResLine("SulfurRow", bg.transform, font, "SULFUR  0",
+                new Color(0.95f, 0.88f, 0.10f), 0.00f);
+        }
+
+        private Text MakeResLine(string name, Transform parent, Font font,
+            string label, Color color, float anchorY)
+        {
+            var go  = MakeText(name, parent, label, 15, font, color, bold: true);
+            var rt  = go.GetComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0f, anchorY);
+            rt.anchorMax = new Vector2(1f, anchorY + 0.33f);
+            rt.offsetMin = new Vector2(8f,  2f);
+            rt.offsetMax = new Vector2(-4f, -2f);
+            go.GetComponent<Text>().alignment = TextAnchor.MiddleLeft;
+            return go.GetComponent<Text>();
+        }
+
+        // ── AREA CLEARED 全幕提示 ─────────────────────────────────────
+        private void BuildAreaClearedOverlay(Transform canvas, Font font)
+        {
+            _clearedPanel = MakePanel("AreaCleared", canvas,
+                new Vector2(0.2f, 0.35f), new Vector2(0.8f, 0.65f), new Vector2(0.5f, 0.5f),
+                Vector2.zero, Vector2.zero,
+                new Color(0f, 0f, 0f, 0.70f));
+            _clearedPanel.SetActive(false);
+
+            _clearedText = MakeText("ClearedText", _clearedPanel.transform,
+                "AREA CLEARED", 52, font, new Color(1f, 0.88f, 0.2f, 1f), bold: true)
+                .GetComponent<Text>();
+            var rt = _clearedText.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
+        }
+
+        // ── 靜態 API（供 CastleManager / Inventory 呼叫）─────────────
+        public static void ShowAreaCleared()
+        {
+            if (Instance != null) Instance.StartCoroutine(Instance.DoShowCleared());
+        }
+
+        private IEnumerator DoShowCleared()
+        {
+            if (_clearedPanel) _clearedPanel.SetActive(true);
+            yield return new WaitForSeconds(4f);
+            if (_clearedPanel) _clearedPanel.SetActive(false);
+        }
+
+        public static void RefreshInventory(Dictionary<ResourceType, int> res)
+        {
+            if (Instance == null) return;
+            int s = res.TryGetValue(ResourceType.Stone,  out int sv) ? sv : 0;
+            int i = res.TryGetValue(ResourceType.Iron,   out int iv) ? iv : 0;
+            int u = res.TryGetValue(ResourceType.Sulfur, out int uv) ? uv : 0;
+            if (Instance._stoneText)  Instance._stoneText.text  = $"STONE   {s}";
+            if (Instance._ironText)   Instance._ironText.text   = $"IRON    {i}";
+            if (Instance._sulfurText) Instance._sulfurText.text = $"SULFUR  {u}";
         }
     }
 }
