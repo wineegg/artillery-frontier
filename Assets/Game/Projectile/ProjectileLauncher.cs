@@ -7,31 +7,21 @@ namespace ArtilleryFrontier.Projectile
 {
     public class ProjectileLauncher : MonoBehaviour
     {
-        [Header("Launch Settings")]
-        [SerializeField] private float speed = 32f;
-        [SerializeField] private float projectileMass = 1f;
-        [SerializeField] private float gravityMultiplier = 1f;
-
         [Header("References")]
-        [SerializeField] private Transform muzzle;
+        [SerializeField] private Transform  muzzle;
         [SerializeField] private GameObject projectilePrefab;
 
-        [Header("Damage")]
-        [SerializeField] private float damage = 50f;
-
-        [Header("Cooldown")]
-        [SerializeField] private float fireCooldown = 0.6f;
-
         private float _lastFireTime = -999f;
-        private CannonRecoil _recoil;
-        private CameraController _cameraCtrl;
-        private ProjectileCamera _projCam;
+
+        private CannonRecoil            _recoil;
+        private CameraController        _cameraCtrl;
+        private ProjectileTrackingCamera _tracking;
 
         private void Start()
         {
             _recoil     = GetComponentInParent<CannonRecoil>();
             _cameraCtrl = Camera.main?.GetComponent<CameraController>();
-            _projCam    = Camera.main?.GetComponent<ProjectileCamera>();
+            _tracking   = Camera.main?.GetComponent<ProjectileTrackingCamera>();
         }
 
         private void Update()
@@ -46,7 +36,7 @@ namespace ArtilleryFrontier.Projectile
             if (CanFire()) Fire();
         }
 
-        private bool CanFire() => Time.time - _lastFireTime >= fireCooldown;
+        private bool CanFire() => Time.time - _lastFireTime >= GameConfig.FireCooldown;
 
         private bool FireKeyDown()
         {
@@ -69,43 +59,21 @@ namespace ArtilleryFrontier.Projectile
         {
             _lastFireTime = Time.time;
 
-            Transform spawnPoint = muzzle != null ? muzzle : transform;
+            Transform spawn = muzzle != null ? muzzle : transform;
 
-            var proj = Instantiate(projectilePrefab, spawnPoint.position, spawnPoint.rotation);
+            var go = Instantiate(projectilePrefab, spawn.position, spawn.rotation);
 
-            if (!proj.TryGetComponent<Rigidbody>(out var rb))
-                rb = proj.AddComponent<Rigidbody>();
+            // 確定性運動學砲彈：以 GameConfig 初速沿砲口方向發射
+            if (!go.TryGetComponent<Projectile>(out var proj))
+                proj = go.AddComponent<Projectile>();
+            proj.Damage = GameConfig.ShellDamage;
+            proj.Launch(spawn.forward * GameConfig.MuzzleSpeed);
 
-            rb.mass       = projectileMass;
-            rb.useGravity = true;
-
-            if (!Mathf.Approximately(gravityMultiplier, 1f))
-            {
-                var cf = proj.AddComponent<ConstantForce>();
-                cf.force = Physics.gravity * rb.mass * (gravityMultiplier - 1f);
-            }
-
-            rb.linearVelocity = spawnPoint.forward * speed;
-
-            // 確保砲彈有 VFX 組件，並傳入傷害值
-            if (!proj.TryGetComponent<ProjectileVFX>(out var vfx))
-                vfx = proj.AddComponent<ProjectileVFX>();
-            vfx.Damage = damage;
-
-            Destroy(proj, 12f);
-
-            // 後座力
             _recoil?.Trigger();
-
-            // 切換側面追蹤視角（看砲彈弧線與落點）
-            _projCam?.StartTracking(proj.transform, spawnPoint);
-
-            // 攝影機衝擊（追蹤中由 CameraController 停用，回歸後才生效）
-            _cameraCtrl?.AddTrauma(0.45f);
+            _tracking?.SetPendingTarget(go.transform, spawn);
+            _cameraCtrl?.AddTrauma(GameConfig.FireTrauma);
         }
 
-        public float GetSpeed()              => speed;
-        public float GetGravityMultiplier()  => gravityMultiplier;
-        public Transform GetMuzzle()         => muzzle != null ? muzzle : transform;
+        public Transform GetMuzzle() => muzzle != null ? muzzle : transform;
     }
 }

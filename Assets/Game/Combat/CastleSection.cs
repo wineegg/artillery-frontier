@@ -47,11 +47,5 @@ namespace ArtilleryFrontier.Combat
                     break;
             }
         }
-
-        protected override void Die()
-        {
-            base.Die();
-            CastleManager.Instance?.OnSectionDestroyed();
-        }
     }
 }

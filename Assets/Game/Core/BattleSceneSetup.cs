@@ -42,11 +42,11 @@ namespace ArtilleryFrontier.Core
             so.FindProperty("barrelPivot").objectReferenceValue = barrelPivot.transform;
             so.ApplyModifiedProperties();
 
-            // --- 砲彈 Prefab（執行時期建立）---
+            // --- 砲彈 Prefab（確定性運動學，無 Rigidbody）---
             GameObject projectilePrefab = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             projectilePrefab.name = "ProjectilePrefab";
             projectilePrefab.transform.localScale = Vector3.one * 0.2f;
-            projectilePrefab.AddComponent<Rigidbody>();
+            projectilePrefab.AddComponent<ArtilleryFrontier.Projectile.Projectile>();
 
             // 存成 Prefab
             string prefabPath = "Assets/Game/Projectile/ProjectilePrefab.prefab";
@@ -61,12 +61,6 @@ namespace ArtilleryFrontier.Core
             if (success)
                 soLauncher.FindProperty("projectilePrefab").objectReferenceValue = savedPrefab;
             soLauncher.ApplyModifiedProperties();
-
-            // TrajectoryPreview
-            var preview = barrelPivot.AddComponent<ArtilleryFrontier.Projectile.TrajectoryPreview>();
-            SerializedObject soPreview = new SerializedObject(preview);
-            soPreview.FindProperty("launcher").objectReferenceValue = launcher;
-            soPreview.ApplyModifiedProperties();
 
             // --- Camera ---
             Camera mainCam = Camera.main;

@@ -5,9 +5,6 @@ namespace ArtilleryFrontier.Core
     [RequireComponent(typeof(Camera))]
     public class CameraController : MonoBehaviour
     {
-        [Header("FOV")]
-        [SerializeField] private float fov = 70f;
-
         [Header("Micro Sway")]
         [SerializeField] private float swayAmplitude = 0.18f;
         [SerializeField] private float swaySpeed = 0.7f;
@@ -25,7 +22,7 @@ namespace ArtilleryFrontier.Core
         private void Awake()
         {
             _cam = GetComponent<Camera>();
-            _cam.fieldOfView = fov;
+            _cam.fieldOfView = GameConfig.AimFOV;
             _baseLocalRotation = transform.localRotation;
         }
 

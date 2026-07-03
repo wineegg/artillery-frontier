@@ -1,15 +1,15 @@
 using UnityEngine;
+using ArtilleryFrontier.Core;
 
 namespace ArtilleryFrontier.Combat
 {
     public class CastleManager : MonoBehaviour
     {
-        public static CastleManager Instance { get; private set; }
-
         private int _total;
         private int _destroyed;
 
-        private void Awake() => Instance = this;
+        private void OnEnable()  => GameEvents.TargetDestroyed += OnTargetDestroyed;
+        private void OnDisable() => GameEvents.TargetDestroyed -= OnTargetDestroyed;
 
         private void Start()
         {
@@ -17,11 +17,13 @@ namespace ArtilleryFrontier.Combat
             _destroyed = 0;
         }
 
-        public void OnSectionDestroyed()
+        private void OnTargetDestroyed(DestructibleTarget target)
         {
+            if (target is not CastleSection) return;
+
             _destroyed++;
             if (_destroyed >= _total && _total > 0)
-                ArtilleryFrontier.UI.ArtilleryHUD.ShowAreaCleared();
+                GameEvents.RaiseAreaCleared();
         }
     }
 }

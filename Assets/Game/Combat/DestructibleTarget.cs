@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using ArtilleryFrontier.Core;
 
 namespace ArtilleryFrontier.Combat
 {
@@ -56,6 +57,7 @@ namespace ArtilleryFrontier.Combat
         {
             ImpactEffect.Spawn(transform.position + Vector3.up * 0.8f, Vector3.up);
             SpawnLoot();
+            GameEvents.RaiseTargetDestroyed(this);
             Destroy(gameObject);
         }
 
@@ -113,5 +115,9 @@ namespace ArtilleryFrontier.Combat
         }
 
         protected void SetDropTable(LootEntry[] table) => dropTable = table;
+
+        // 供 ImpactMarker 讀取（Impact 後的即時 HP）
+        public float GetHP()    => _hp;
+        public float GetMaxHP() => maxHP;
     }
 }

@@ -1,37 +1,21 @@
 using UnityEngine;
-using ArtilleryFrontier.Core;
-using ArtilleryFrontier.Combat;
 
 namespace ArtilleryFrontier.Projectile
 {
-    [RequireComponent(typeof(Rigidbody))]
+    /// <summary>
+    /// 砲彈的純視覺元件：砲口火光 + 飛行尾煙。
+    /// 運動 / 碰撞 / 傷害已由 <see cref="Projectile"/> 負責（確定性運動學）。
+    /// </summary>
     public class ProjectileVFX : MonoBehaviour
     {
-        public float Damage { get; set; } = 50f;
-
         private void Start()
         {
-            // 砲彈本體用亮橘色，確保在 URP 下可見（Default 材質在 URP 是粉紅）
             var r = GetComponent<Renderer>();
             if (r != null)
                 r.material = SpriteMat(new Color(1f, 0.55f, 0.05f, 1f));
 
             SpawnMuzzleFlash();
             AttachSmokeTrail();
-        }
-
-        private void OnCollisionEnter(Collision col)
-        {
-            // 傳遞傷害給可破壞目標
-            col.collider.GetComponentInParent<DestructibleTarget>()?.Impact(Damage);
-
-            ImpactEffect.Spawn(col.contacts[0].point, col.contacts[0].normal);
-
-            var cam = Camera.main;
-            if (cam != null && cam.TryGetComponent<CameraController>(out var cc))
-                cc.AddTrauma(0.55f);
-
-            Destroy(gameObject);
         }
 
         // ── 砲口火光 ─────────────────────────────────────────────────

@@ -29,31 +29,47 @@ namespace ArtilleryFrontier.Core
             // 2. 建立炮台外觀
             CannonVisualBuilder.Build();
 
-            // 3. 加 CameraController + ProjectileCamera 到 Main Camera
+            // 3. 相機元件：CameraDirector（模式權威）+ CameraController（sway/shake）
+            //    + ObservationMode（右鍵觀測）+ ProjectileTrackingCamera（自動追彈）
             var cam = Camera.main;
             if (cam != null)
             {
+                if (!cam.TryGetComponent<CameraDirector>(out _))
+                    cam.gameObject.AddComponent<CameraDirector>();
+
                 if (!cam.TryGetComponent<CameraController>(out _))
                     cam.gameObject.AddComponent<CameraController>();
-                if (!cam.TryGetComponent<ProjectileCamera>(out _))
-                    cam.gameObject.AddComponent<ProjectileCamera>();
+
+                if (!cam.TryGetComponent<ProjectileTrackingCamera>(out _))
+                    cam.gameObject.AddComponent<ProjectileTrackingCamera>();
+
+                if (!cam.TryGetComponent<ObservationMode>(out _))
+                    cam.gameObject.AddComponent<ObservationMode>();
             }
 
-            // 4. 更新砲彈 Prefab：確保有 ProjectileVFX + Sphere Collider
+            // 3b. 第一人稱炮台視角（隱藏底座 / 車輪 / 轉台）
+            var artBaseGO = GameObject.Find("ArtilleryBase");
+            if (artBaseGO != null && !artBaseGO.TryGetComponent<ArtilleryFrontier.Combat.FirstPersonCannonView>(out _))
+                artBaseGO.AddComponent<ArtilleryFrontier.Combat.FirstPersonCannonView>();
+
+            // 4. 更新砲彈 Prefab：確定性運動學砲彈（Projectile + VFX + Tracer，無 Rigidbody）
             UpdateProjectilePrefab();
 
             // 5. 修正相機位置（移出砲管幾何體）
             FixCameraPosition();
 
-            // 5c. 關閉彈道預覽（舊版場景 showTrajectoryAlways 可能為 true）
-            DisableTrajectoryPreview();
-
-            // 5b. 移除 AngleVisualizer（TextMesh 在 URP 下顯示粉紅；角度已由 ArtilleryHUD 呈現）
-            foreach (var av in Object.FindObjectsByType<AngleVisualizer>(FindObjectsSortMode.None))
-                Object.DestroyImmediate(av.gameObject.GetComponent<AngleVisualizer>());
-
             // 6. 目標區域（礦脈 + 城堡）
             TargetZoneBuilder.Build();
+
+            // 6b. 目標可見性系統（浮動標籤）
+            foreach (var tvs in Object.FindObjectsByType<TargetVisibilitySystem>(FindObjectsSortMode.None))
+                Object.DestroyImmediate(tvs.gameObject);
+            new GameObject("TargetVisibilitySystem").AddComponent<TargetVisibilitySystem>();
+
+            // 6b-2. 落點預測圓圈（調炮角時顯示命中位置 + 飛行時間）
+            foreach (var lp in Object.FindObjectsByType<LandingPreview>(FindObjectsSortMode.None))
+                Object.DestroyImmediate(lp.gameObject);
+            new GameObject("LandingPreview").AddComponent<LandingPreview>();
 
             // 7. Screen Space HUD（核心視覺回饋）
             if (Object.FindAnyObjectByType<ArtilleryHUD>() == null)
@@ -78,15 +94,21 @@ namespace ArtilleryFrontier.Core
             using (var scope = new PrefabUtility.EditPrefabContentsScope(prefabPath))
             {
                 var root = scope.prefabContentsRoot;
+
+                // 確定性運動學砲彈：Projectile 負責運動 / 碰撞 / 傷害
+                if (!root.TryGetComponent<ArtilleryFrontier.Projectile.Projectile>(out _))
+                    root.AddComponent<ArtilleryFrontier.Projectile.Projectile>();
+
                 if (!root.TryGetComponent<ArtilleryFrontier.Projectile.ProjectileVFX>(out _))
                     root.AddComponent<ArtilleryFrontier.Projectile.ProjectileVFX>();
 
-                // 確保 Rigidbody 設定正確
+                // 高可視度砲彈追蹤器（亮黃 + Additive 閃動 Trail）
+                if (!root.TryGetComponent<ArtilleryFrontier.Projectile.ProjectileTracer>(out _))
+                    root.AddComponent<ArtilleryFrontier.Projectile.ProjectileTracer>();
+
+                // 運動學砲彈自行處理碰撞，移除 Rigidbody（Projectile.Awake 也會於執行時清除）
                 if (root.TryGetComponent<Rigidbody>(out var rb))
-                {
-                    rb.mass = 1f;
-                    rb.useGravity = true;
-                }
+                    Object.DestroyImmediate(rb, true);
             }
         }
 
@@ -141,37 +163,24 @@ namespace ArtilleryFrontier.Core
             }
         }
 
-        private static void DisableTrajectoryPreview()
-        {
-            var preview = Object.FindAnyObjectByType<TrajectoryPreview>();
-            if (preview == null) return;
-
-            // 用 SerializedObject 覆寫場景已儲存的 showTrajectoryAlways=true
-            var so = new SerializedObject(preview);
-            so.FindProperty("showTrajectoryAlways").boolValue = false;
-            so.ApplyModifiedProperties();
-
-            Debug.Log("[VerticalSliceSetup] 彈道預覽已關閉。");
-        }
-
         private static void FixCameraPosition()
         {
             var cam = Camera.main;
             if (cam == null) return;
 
-            // 找 BarrelPivot
-            Transform barrelPivot = null;
-            var artBase = GameObject.Find("ArtilleryBase");
-            if (artBase != null) barrelPivot = artBase.transform.Find("BarrelPivot");
+            cam.fieldOfView = GameConfig.AimFOV;
 
-            if (barrelPivot != null)
-            {
-                cam.transform.SetParent(barrelPivot);
-                // 砲架後方 0.35m，上方 0.55m — 在所有幾何體外
-                cam.transform.localPosition = new Vector3(0f, 0.55f, -0.35f);
-                cam.transform.localRotation = Quaternion.identity;
-                Debug.Log("[VerticalSliceSetup] 相機重新定位至砲架後方。");
-            }
+            var artBase = GameObject.Find("ArtilleryBase");
+            if (artBase == null) return;
+
+            // 輕度過肩第三人稱：掛在 ArtilleryBase（僅隨 Yaw 轉），與砲管俯仰脫耦，
+            // 高仰角時不會看天；固定下俯讓前方地面與落點圈完整可見。
+            cam.transform.SetParent(artBase.transform);
+            cam.transform.localPosition = new Vector3(
+                GameConfig.AimCamSide, GameConfig.AimCamUp, GameConfig.AimCamBack);
+            cam.transform.localRotation = Quaternion.Euler(GameConfig.AimCamTilt, 0f, 0f);
+
+            Debug.Log("[VerticalSliceSetup] 相機定位：輕度過肩第三人稱（隨 Yaw、脫離砲管俯仰）。");
         }
 
         // 多次執行 Setup Battle Scene 會在場景留下多個 ArtilleryBase（含舊的粉紅砲管），全數清除

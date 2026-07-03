@@ -1,26 +1,36 @@
 using UnityEngine;
+using ArtilleryFrontier.Core;
 
 namespace ArtilleryFrontier.Combat
 {
+    /// <summary>
+    /// 掉落視覺點綴。資源在生成當下（= 目標摧毀）立即結算，
+    /// 因此不論目標多遠都保證「命中 → +N → 資源欄更新」。
+    /// 這裡的寶石只負責在命中點浮起淡出，提供空間回饋。
+    /// </summary>
     public class FloatingLoot : MonoBehaviour
     {
         private ResourceType _type;
-        private int   _amount;
-        private float _age;
+        private int          _amount;
+        private float        _age;
+        private Material      _mat;
+        private Color         _baseColor;
 
-        private const float FloatDuration = 0.9f;
-        private const float AbsorbRange   = 22f;
-        private const float AbsorbSpeed   = 15f;
-        private const float PickupRadius  = 1.8f;
+        private const float RiseSpeed = 3f;
+        private const float Lifetime  = 1.4f;
 
         public static void Spawn(Vector3 pos, ResourceType type, int amount)
         {
             var go = new GameObject($"Loot_{type}");
             go.transform.position = pos;
-            var fl    = go.AddComponent<FloatingLoot>();
+
+            var fl = go.AddComponent<FloatingLoot>();
             fl._type   = type;
             fl._amount = amount;
             fl.BuildVisual();
+
+            // 命中即獲得：立即結算資源（觸發 +N 彈窗與資源欄更新）
+            GameEvents.RaiseLootCollected(type, amount);
         }
 
         private void BuildVisual()
@@ -28,10 +38,27 @@ namespace ArtilleryFrontier.Combat
             var gem = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             gem.transform.SetParent(transform);
             gem.transform.localPosition = Vector3.zero;
-            gem.transform.localScale    = Vector3.one * 0.4f;
+            gem.transform.localScale    = Vector3.one * 2.5f;  // 目標遠(250m+)，放大才看得見
             Destroy(gem.GetComponent<Collider>());
-            var mat = new Material(Shader.Find("Sprites/Default")) { color = TypeColor(_type) };
-            gem.GetComponent<Renderer>().material = mat;
+
+            _baseColor = TypeColor(_type);
+            _mat = new Material(Shader.Find("Sprites/Default")) { color = _baseColor };
+            gem.GetComponent<Renderer>().material = _mat;
+        }
+
+        private void Update()
+        {
+            _age += Time.deltaTime;
+            transform.position += Vector3.up * (RiseSpeed * Time.deltaTime);
+            transform.Rotate(0f, 180f * Time.deltaTime, 0f);
+
+            if (_mat != null)
+            {
+                float a = Mathf.Clamp01(1f - _age / Lifetime);
+                _mat.color = new Color(_baseColor.r, _baseColor.g, _baseColor.b, a);
+            }
+
+            if (_age >= Lifetime) Destroy(gameObject);
         }
 
         private static Color TypeColor(ResourceType t) => t switch
@@ -41,40 +68,5 @@ namespace ArtilleryFrontier.Combat
             ResourceType.Sulfur => new Color(0.95f, 0.88f, 0.08f),
             _                   => Color.white,
         };
-
-        private void Update()
-        {
-            _age += Time.deltaTime;
-            transform.Rotate(0f, 150f * Time.deltaTime, 0f);
-
-            // Phase 1: float upward
-            if (_age < FloatDuration)
-            {
-                transform.position += Vector3.up * (3f * Time.deltaTime);
-                return;
-            }
-
-            // Phase 2: drift toward camera, absorb on contact
-            Transform cam = Camera.main?.transform;
-            if (cam == null) return;
-
-            float dist = Vector3.Distance(transform.position, cam.position);
-            if (dist <= AbsorbRange)
-            {
-                transform.position = Vector3.MoveTowards(
-                    transform.position, cam.position, AbsorbSpeed * Time.deltaTime);
-
-                if (dist <= PickupRadius)
-                {
-                    Inventory.Instance?.Add(_type, _amount);
-                    Destroy(gameObject);
-                }
-            }
-            else
-            {
-                // gentle bob while out of range
-                transform.position += new Vector3(0f, Mathf.Sin(_age * 2.2f) * 0.015f, 0f);
-            }
-        }
     }
 }
