@@ -40,8 +40,12 @@ namespace ArtilleryFrontier.Core
                 if (!cam.TryGetComponent<CameraController>(out _))
                     cam.gameObject.AddComponent<CameraController>();
 
-                if (!cam.TryGetComponent<ProjectileTrackingCamera>(out _))
-                    cam.gameObject.AddComponent<ProjectileTrackingCamera>();
+                if (!cam.TryGetComponent<ProjectileTrackingCamera>(out var trk))
+                    trk = cam.gameObject.AddComponent<ProjectileTrackingCamera>();
+                // 強制關閉自動追彈（覆寫舊場景可能存下的 true），連發不被打斷
+                var soTrk = new SerializedObject(trk);
+                soTrk.FindProperty("autoTrackProjectile").boolValue = false;
+                soTrk.ApplyModifiedProperties();
 
                 if (!cam.TryGetComponent<ObservationMode>(out _))
                     cam.gameObject.AddComponent<ObservationMode>();
@@ -71,9 +75,18 @@ namespace ArtilleryFrontier.Core
                 Object.DestroyImmediate(lp.gameObject);
             new GameObject("LandingPreview").AddComponent<LandingPreview>();
 
+            // 6c. 敵人波次系統（分波生成 + 基地 HP + 勝敗）
+            foreach (var wm in Object.FindObjectsByType<WaveManager>(FindObjectsSortMode.None))
+                Object.DestroyImmediate(wm.gameObject);
+            new GameObject("WaveManager").AddComponent<WaveManager>();
+
             // 7. Screen Space HUD（核心視覺回饋）
             if (Object.FindAnyObjectByType<ArtilleryHUD>() == null)
                 new GameObject("ArtilleryHUD").AddComponent<ArtilleryHUD>();
+
+            // 7b. 彈種選擇列（底部）+ 熱鍵 1-5
+            if (Object.FindAnyObjectByType<AmmoSelector>() == null)
+                new GameObject("AmmoSelector").AddComponent<AmmoSelector>();
 
             // 8. 加入 UI 發射按鈕（Android 用）
             BuildFireUI();

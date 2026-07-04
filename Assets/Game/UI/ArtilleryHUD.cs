@@ -17,11 +17,22 @@ namespace ArtilleryFrontier.UI
         private GameObject _clearedPanel;
         private Text       _clearedText;
 
+        private RectTransform _baseFillRT;
+        private Image         _baseFillImg;
+        private Text          _baseText;
+        private Text          _waveText;
+        private GameObject    _endPanel;
+        private Text          _endText;
+
         private void OnEnable()
         {
             GameEvents.ResourceChanged += OnResourceChanged;
             GameEvents.LootCollected   += OnLootCollected;
             GameEvents.AreaCleared     += OnAreaCleared;
+            GameEvents.BaseChanged     += OnBaseChanged;
+            GameEvents.WaveChanged     += OnWaveChanged;
+            GameEvents.GameOver        += OnGameOver;
+            GameEvents.Victory         += OnVictory;
         }
 
         private void OnDisable()
@@ -29,6 +40,10 @@ namespace ArtilleryFrontier.UI
             GameEvents.ResourceChanged -= OnResourceChanged;
             GameEvents.LootCollected   -= OnLootCollected;
             GameEvents.AreaCleared     -= OnAreaCleared;
+            GameEvents.BaseChanged     -= OnBaseChanged;
+            GameEvents.WaveChanged     -= OnWaveChanged;
+            GameEvents.GameOver        -= OnGameOver;
+            GameEvents.Victory         -= OnVictory;
         }
 
         private void Start()
@@ -53,9 +68,87 @@ namespace ArtilleryFrontier.UI
 
             BuildCrosshair(root.transform);
             BuildLandingReadout(root.transform, font);
-            BuildAmmoLabel(root.transform, font);
             BuildInventoryPanel(root.transform, font);
+            BuildTopBar(root.transform, font);
+            BuildEndBanner(root.transform, font);
             BuildAreaClearedOverlay(root.transform, font);
+        }
+
+        // ── 頂部：基地血條 + 波次 ─────────────────────────────────────
+        private void BuildTopBar(Transform canvas, Font font)
+        {
+            var waveGO = MakeText("WaveText", canvas, "WAVE  0/0", 26, font,
+                new Color(1f, 0.9f, 0.4f), bold: true);
+            var wr = waveGO.GetComponent<RectTransform>();
+            wr.anchorMin = new Vector2(0.5f, 1f); wr.anchorMax = new Vector2(0.5f, 1f);
+            wr.pivot = new Vector2(0.5f, 1f); wr.sizeDelta = new Vector2(420f, 36f);
+            wr.anchoredPosition = new Vector2(0f, -12f);
+            _waveText = waveGO.GetComponent<Text>();
+
+            var bg = MakePanel("BaseBarBg", canvas,
+                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
+                new Vector2(0f, -54f), new Vector2(400f, 32f), new Color(0f, 0f, 0f, 0.6f));
+
+            var fillGO = new GameObject("BaseFill");
+            fillGO.transform.SetParent(bg.transform, false);
+            _baseFillImg = fillGO.AddComponent<Image>();
+            _baseFillImg.color = new Color(0.30f, 0.85f, 0.35f);
+            _baseFillRT = fillGO.GetComponent<RectTransform>();
+            _baseFillRT.anchorMin = new Vector2(0f, 0f);
+            _baseFillRT.anchorMax = new Vector2(1f, 1f);
+            _baseFillRT.offsetMin = new Vector2(3f, 3f);
+            _baseFillRT.offsetMax = new Vector2(0f, -3f);
+
+            var txt = MakeText("BaseText", bg.transform, "BASE  100/100", 18, font,
+                Color.white, bold: true);
+            var tr = txt.GetComponent<RectTransform>();
+            tr.anchorMin = Vector2.zero; tr.anchorMax = Vector2.one;
+            tr.offsetMin = tr.offsetMax = Vector2.zero;
+            _baseText = txt.GetComponent<Text>();
+        }
+
+        // ── GAME OVER / VICTORY 橫幅 ──────────────────────────────────
+        private void BuildEndBanner(Transform canvas, Font font)
+        {
+            _endPanel = MakePanel("EndBanner", canvas,
+                new Vector2(0.15f, 0.38f), new Vector2(0.85f, 0.62f), new Vector2(0.5f, 0.5f),
+                Vector2.zero, Vector2.zero, new Color(0f, 0f, 0f, 0.78f));
+            _endPanel.SetActive(false);
+
+            _endText = MakeText("EndText", _endPanel.transform, "", 56, font, Color.white, bold: true)
+                .GetComponent<Text>();
+            var rt = _endText.GetComponent<RectTransform>();
+            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
+            rt.offsetMin = rt.offsetMax = Vector2.zero;
+        }
+
+        // ── 戰局事件處理 ─────────────────────────────────────────────
+        private void OnBaseChanged(int hp, int max)
+        {
+            float ratio = max > 0 ? Mathf.Clamp01((float)hp / max) : 0f;
+            if (_baseFillRT != null) _baseFillRT.anchorMax = new Vector2(ratio, 1f);
+            if (_baseFillImg != null)
+                _baseFillImg.color = ratio > 0.5f ? new Color(0.30f, 0.85f, 0.35f)
+                                   : ratio > 0.25f ? new Color(0.95f, 0.80f, 0.15f)
+                                                   : new Color(0.90f, 0.25f, 0.20f);
+            if (_baseText != null) _baseText.text = $"BASE  {hp}/{max}";
+        }
+
+        private void OnWaveChanged(int wave, int total)
+        {
+            if (_waveText != null)
+                _waveText.text = wave <= 0 ? $"PREPARE...  0/{total}" : $"WAVE  {wave}/{total}";
+        }
+
+        private void OnGameOver() => ShowEnd("GAME OVER\n\nPress R to Restart", new Color(1f, 0.3f, 0.25f));
+        private void OnVictory()  => ShowEnd("VICTORY!\n\nPress R to Restart", new Color(1f, 0.88f, 0.25f));
+
+        private void ShowEnd(string msg, Color color)
+        {
+            if (_endPanel == null) return;
+            _endPanel.SetActive(true);
+            _endText.text  = msg;
+            _endText.color = color;
         }
 
         // ── 準心下方：落點距離大字 ────────────────────────────────────
@@ -72,13 +165,42 @@ namespace ArtilleryFrontier.UI
             rt.sizeDelta = new Vector2(460f, 54f);
         }
 
+        private ArtilleryController _artctrl;
+
         private void Update()
         {
             if (_landingText == null) return;
+
+            var sel = TargetVisibilitySystem.SelectedTarget;
+            if (sel != null)
+            {
+                if (_artctrl == null) _artctrl = FindAnyObjectByType<ArtilleryController>();
+                _landingText.enabled = true;
+                if (_artctrl != null && !_artctrl.LastSolutionValid)
+                {
+                    _landingText.text  = "OUT OF RANGE";
+                    _landingText.color = new Color(1f, 0.35f, 0.30f);
+                }
+                else if (_artctrl != null && _artctrl.AimConverged)
+                {
+                    _landingText.text  = "● LOCKED — FIRE";
+                    _landingText.color = new Color(0.35f, 0.95f, 0.40f);
+                }
+                else
+                {
+                    _landingText.text  = "AIMING…";
+                    _landingText.color = new Color(1f, 0.92f, 0.25f);
+                }
+                return;
+            }
+
             bool show = CameraDirector.IsAiming && LandingPreview.LastDistance > 0.5f;
             _landingText.enabled = show;
             if (show)
-                _landingText.text = $"LANDING  {LandingPreview.LastDistance:0} m";
+            {
+                _landingText.text  = $"LANDING  {LandingPreview.LastDistance:0} m";
+                _landingText.color = new Color(1f, 0.92f, 0.25f);
+            }
         }
 
         // ── 中央十字準心 ──────────────────────────────────────────────
@@ -104,22 +226,6 @@ namespace ArtilleryFrontier.UI
             rt.pivot            = new Vector2(0.5f, 0.5f);
             rt.anchoredPosition = pos;
             rt.sizeDelta        = size;
-        }
-
-        // ── 左下：彈種 ───────────────────────────────────────────────
-        private static void BuildAmmoLabel(Transform canvas, Font font)
-        {
-            var bg = MakePanel("AmmoBG", canvas,
-                Vector2.zero, Vector2.zero, Vector2.zero,
-                new Vector2(24f, 24f), new Vector2(260f, 68f),
-                new Color(0f, 0f, 0f, 0.55f));
-
-            var txt = MakeText("AmmoType", bg.transform, "HE SHELL", 30, font,
-                new Color(1f, 0.85f, 0.35f), bold: true);
-            var rt = txt.GetComponent<RectTransform>();
-            rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one;
-            rt.offsetMin = new Vector2(16f, 0f); rt.offsetMax = new Vector2(-8f, 0f);
-            txt.GetComponent<Text>().alignment = TextAnchor.MiddleLeft;
         }
 
         // ── 右上：資源欄（移離右下 FIRE 按鈕，放大字體）─────────────

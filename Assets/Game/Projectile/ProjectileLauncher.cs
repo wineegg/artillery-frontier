@@ -66,7 +66,7 @@ namespace ArtilleryFrontier.Projectile
             // 確定性運動學砲彈：以 GameConfig 初速沿砲口方向發射
             if (!go.TryGetComponent<Projectile>(out var proj))
                 proj = go.AddComponent<Projectile>();
-            proj.Damage = GameConfig.ShellDamage;
+            proj.Ammo = AmmoSelector.Current;
             proj.Launch(spawn.forward * GameConfig.MuzzleSpeed);
 
             _recoil?.Trigger();

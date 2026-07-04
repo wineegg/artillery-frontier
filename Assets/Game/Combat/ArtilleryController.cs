@@ -37,6 +37,17 @@ namespace ArtilleryFrontier.Combat
 
         private ProjectileLauncher _launcher;
 
+        /// 本幀玩家是否有手動拖曳瞄準（用於解除目標鎖定）。
+        public bool ManualAimActive { get; private set; }
+
+        /// 最近一次 AimAtTarget 是否有有效解（false = 射程不足）。
+        public bool LastSolutionValid { get; private set; } = true;
+
+        /// 當前砲口是否已對準目標角（可發射）。
+        public bool AimConverged =>
+            Mathf.Abs(Mathf.DeltaAngle(_currentYaw, _targetYaw)) < 2f &&
+            Mathf.Abs(_currentPitch - _targetPitch) < 1.5f;
+
         // ── 初始化 ───────────────────────────────────────────────────
         private void Awake()
         {
@@ -51,17 +62,33 @@ namespace ArtilleryFrontier.Combat
             _launcher = GetComponentInChildren<ProjectileLauncher>();
         }
 
-        /// 自動瞄準：以彈道解算設定 Yaw + 仰角，讓砲彈落在目標上。
-        public void AimAtTarget(Vector3 targetPos)
+        /// 自動瞄準：以彈道解算設定 Yaw + 仰角。移動目標會用飛行時間做單次提前量預測。
+        public void AimAtTarget(Vector3 targetPos, Vector3 targetVel = default)
         {
             Vector3 muzzle = _launcher != null ? _launcher.GetMuzzle().position
                            : (barrelPivot != null ? barrelPivot.position : transform.position);
 
-            float yaw   = Ballistics.SolveYaw(muzzle, targetPos);
-            float pitch = Ballistics.SolveElevation(muzzle, targetPos, GameConfig.MuzzleSpeed);
+            // 提前量：二次迭代收斂（用飛行時間把目標往前推），移動目標更準
+            float speed = GameConfig.MuzzleSpeed;
+            Vector3 aimPoint = targetPos;
+            if (targetVel.sqrMagnitude > 0.01f)
+            {
+                for (int i = 0; i < 2; i++)
+                {
+                    float p = Ballistics.SolveElevation(muzzle, aimPoint, speed);
+                    if (float.IsNaN(p)) break;
+                    float x   = new Vector2(aimPoint.x - muzzle.x, aimPoint.z - muzzle.z).magnitude;
+                    float tof = x / Mathf.Max(speed * Mathf.Cos(p * Mathf.Deg2Rad), 0.01f);
+                    aimPoint  = targetPos + targetVel * tof;
+                }
+            }
 
+            float yaw   = Ballistics.SolveYaw(muzzle, aimPoint);
+            float pitch = Ballistics.SolveElevation(muzzle, aimPoint, speed);
+
+            LastSolutionValid = !float.IsNaN(pitch);
             _targetYaw = Mathf.Clamp(yaw, -90f, 90f);
-            if (!float.IsNaN(pitch))
+            if (LastSolutionValid)
                 _targetPitch = Mathf.Clamp(pitch, minAngle, maxAngle);
         }
 
@@ -90,11 +117,13 @@ namespace ArtilleryFrontier.Combat
             float fineMul = shift ? 0.15f : 1f;
 
             // 左鍵拖拽：粗調 Yaw + Pitch（指標在 UI 上時不拖炮，避免點標記/FIRE 誤觸）
+            ManualAimActive = false;
             bool overUI = EventSystem.current != null && EventSystem.current.IsPointerOverGameObject();
             if (!overUI && Mouse.current.leftButton.isPressed)
             {
                 Vector2 delta = Mouse.current.delta.ReadValue();
                 _touchDelta = delta * 0.1f * fineMul;
+                if (delta.sqrMagnitude > 0.5f) ManualAimActive = true;   // 有實際拖曳 → 解除鎖定
             }
             else
             {
@@ -110,6 +139,7 @@ namespace ArtilleryFrontier.Combat
 
         private void HandleTouchInput()
         {
+            ManualAimActive = false;
             if (Touchscreen.current == null) return;
 
             var touches = Touchscreen.current.touches;
@@ -124,7 +154,10 @@ namespace ArtilleryFrontier.Combat
                 if (touch.touchId.ReadValue() == _activeTouchId)
                 {
                     if (phase == UnityEngine.InputSystem.TouchPhase.Moved)
+                    {
                         _touchDelta = touch.delta.ReadValue() * 0.05f;
+                        if (_touchDelta.sqrMagnitude > 0.01f) ManualAimActive = true;
+                    }
                     else if (phase == UnityEngine.InputSystem.TouchPhase.Ended ||
                              phase == UnityEngine.InputSystem.TouchPhase.Canceled)
                     {

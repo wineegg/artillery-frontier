@@ -22,6 +22,21 @@ namespace ArtilleryFrontier.Core
         /// 城堡全數清除。
         public static event Action AreaCleared;
 
+        /// 敵人生成（供標記系統動態加標記）。
+        public static event Action<DestructibleTarget> EnemySpawned;
+
+        /// 基地 HP 變動 (目前, 上限)。
+        public static event Action<int, int> BaseChanged;
+
+        /// 波次變動 (目前波, 總波)。
+        public static event Action<int, int> WaveChanged;
+
+        /// 基地陣亡。
+        public static event Action GameOver;
+
+        /// 全波次清除，勝利。
+        public static event Action Victory;
+
         public static void RaiseLootCollected(ResourceType type, int amount)
             => LootCollected?.Invoke(type, amount);
 
@@ -33,5 +48,20 @@ namespace ArtilleryFrontier.Core
 
         public static void RaiseAreaCleared()
             => AreaCleared?.Invoke();
+
+        public static void RaiseEnemySpawned(DestructibleTarget enemy)
+            => EnemySpawned?.Invoke(enemy);
+
+        public static void RaiseBaseChanged(int hp, int max)
+            => BaseChanged?.Invoke(hp, max);
+
+        public static void RaiseWaveChanged(int wave, int total)
+            => WaveChanged?.Invoke(wave, total);
+
+        public static void RaiseGameOver()
+            => GameOver?.Invoke();
+
+        public static void RaiseVictory()
+            => Victory?.Invoke();
     }
 }

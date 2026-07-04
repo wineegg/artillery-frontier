@@ -12,7 +12,7 @@ namespace ArtilleryFrontier.Projectile
     [DefaultExecutionOrder(50)]
     public class Projectile : MonoBehaviour
     {
-        public float Damage { get; set; } = GameConfig.ShellDamage;
+        public AmmoType Ammo { get; set; } = AmmoType.Normal;
 
         private Vector3 _vel;
         private bool    _live;
@@ -78,7 +78,27 @@ namespace ArtilleryFrontier.Projectile
         {
             _live = false;
 
-            target?.Impact(Damage);
+            var spec = AmmoConfig.Get(Ammo);
+
+            if (spec.aoeRadius > 0f)
+            {
+                // 範圍爆炸：命中點半徑內所有目標
+                foreach (var col in Physics.OverlapSphere(point, spec.aoeRadius, ~0,
+                             QueryTriggerInteraction.Ignore))
+                {
+                    if (col is TerrainCollider) continue;
+                    col.GetComponentInParent<DestructibleTarget>()?.Impact(spec.damage, spec.ignoreArmor);
+                }
+            }
+            else if (target != null)
+            {
+                target.Impact(spec.damage, spec.ignoreArmor);
+                if (target is Enemy e)
+                {
+                    if (spec.burnDps > 0f) e.ApplyBurn(spec.burnDps, spec.burnTime);
+                    if (spec.slowFactor > 0f && spec.slowFactor < 1f) e.ApplySlow(spec.slowFactor, spec.slowTime);
+                }
+            }
 
             var cam    = Camera.main;
             float dist = cam != null ? Vector3.Distance(cam.transform.position, point) : 0f;

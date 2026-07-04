@@ -45,9 +45,12 @@ namespace ArtilleryFrontier.Combat
         }
 
         // ── 傷害 / 死亡 ──────────────────────────────────────────────
-        public virtual void Impact(float rawDamage)
+        public virtual void Impact(float rawDamage) => Impact(rawDamage, false);
+
+        /// ignoreArmor：穿透彈 / 燃燒無視護甲。
+        public virtual void Impact(float rawDamage, bool ignoreArmor)
         {
-            float eff = Mathf.Max(1f, rawDamage - armor);
+            float eff = ignoreArmor ? Mathf.Max(1f, rawDamage) : Mathf.Max(1f, rawDamage - armor);
             _hp = Mathf.Max(0f, _hp - eff);
             PaintDamage();
             if (_hp <= 0f) Die();

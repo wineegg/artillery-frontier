@@ -14,7 +14,8 @@ namespace ArtilleryFrontier.Core
         [SerializeField] private float returnTime    = 0.6f;
 
         [Header("Auto Track")]
-        [SerializeField] private bool  autoTrackProjectile = true;
+        // 波次防禦需要連發，預設關閉自動追彈（仍可按住 C 手動看彈）。
+        [SerializeField] private bool  autoTrackProjectile = false;
         [SerializeField] private float autoTrackDelay      = 0.3f;
 
         private enum State { Idle, ToSide, Following, HitDwell, Returning }
